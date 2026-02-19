@@ -52,24 +52,14 @@ struct FrameHeader {
 /// gets its own `AudioProcessor` with an independent VAD stream.
 public class IPCServer {
     private let socketPath: String
-    private let vadModel: SileroVADModel?
+    private let vadModel: SileroVADModel
     private let gateConfig: GateConfig
 
-    public init(socketPath: String, modelPath: String? = nil, gateConfig: GateConfig = .default) {
+    public init(socketPath: String, modelPath: String, gateConfig: GateConfig = .default) throws {
         self.socketPath = socketPath
         self.gateConfig = gateConfig
-
-        if let path = modelPath {
-            do {
-                vadModel = try SileroVADModel(modelPath: path)
-                fputs("[vad] model loaded: \(path)\n", stderr)
-            } catch {
-                fputs("[vad] failed to load model: \(error) — using RMS fallback\n", stderr)
-                vadModel = nil
-            }
-        } else {
-            vadModel = nil
-        }
+        self.vadModel = try SileroVADModel(modelPath: modelPath)
+        fputs("[vad] model loaded: \(modelPath)\n", stderr)
     }
 
     public func start() throws {
@@ -109,6 +99,7 @@ public class IPCServer {
         let config = self.gateConfig
         DispatchQueue.global(qos: .userInitiated).async {
             let conn = Connection(fd: fd, vadModel: model, gateConfig: config)
+
             conn.runReadLoop()
             fputs("[ipc] client disconnected fd=\(fd)\n", stderr)
         }
@@ -125,7 +116,7 @@ class Connection {
     private let processor: AudioProcessor
     private var outSeq: UInt64 = 0
 
-    init(fd: Int32, vadModel: SileroVADModel? = nil, gateConfig: GateConfig = .default) {
+    init(fd: Int32, vadModel: SileroVADModel, gateConfig: GateConfig = .default) {
         self.fd = fd
         self.processor = AudioProcessor(model: vadModel, config: gateConfig)
     }

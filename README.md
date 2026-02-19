@@ -11,7 +11,7 @@ voxd sits between your audio source and speech processing pipeline. It accepts r
 
 ## Features
 
-- **Silero VAD v5** — neural speech detection via ONNX Runtime, with RMS energy fallback
+- **Silero VAD v5** — neural speech detection via ONNX Runtime
 - **Unix socket IPC** — binary framing protocol for zero-copy integration with any language
 - **Shared model** — single ONNX session serves multiple concurrent connections with isolated LSTM state
 - **Tunable gating** — thresholds, durations, and pre-roll configurable via CLI flags
@@ -48,7 +48,7 @@ If `--model` isn't set, voxd looks for `silero_vad.onnx` in:
 2. Current working directory
 3. `~/models/vad/`
 
-No model found → RMS energy fallback.
+If no model is found, voxd exits with an error.
 
 ### Examples
 
@@ -127,7 +127,7 @@ Each connection gets its own VAD stream and gate state. The ONNX model is loaded
 swift test
 ```
 
-Requires `silero_vad.onnx` at `~/models/vad/` or `VOXD_MODEL_PATH` for VAD tests. Processor tests run without a model.
+Requires `silero_vad.onnx` at `~/models/vad/` or `VOXD_MODEL_PATH`.
 
 ## License
 

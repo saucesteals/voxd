@@ -64,12 +64,12 @@ public class AudioProcessor {
     private let config: GateConfig
     private var state: GateState = .idle
     private var preRollBuffer: [[Int16]] = []
-    private let vadStream: SileroVADStream?
+    private let vadStream: SileroVADStream
     private var lastProb: Float = 0
 
-    public init(model: SileroVADModel?, config: GateConfig = .default) {
+    public init(model: SileroVADModel, config: GateConfig = .default) {
         self.config = config
-        self.vadStream = model?.newStream()
+        self.vadStream = model.newStream()
     }
 
     /// Process one audio frame (raw PCM16LE bytes at 48kHz).
@@ -104,13 +104,7 @@ public class AudioProcessor {
     // MARK: - Private
 
     private func computeProbability(_ samples: [Int16]) -> Float {
-        if let vad = vadStream {
-            return vad.feedSamples48kHz(samples).last ?? lastProb
-        }
-        // RMS energy fallback
-        var sumSq: Float = 0
-        for s in samples { let f = Float(s) / 32768.0; sumSq += f * f }
-        return min(1.0, sqrtf(sumSq / Float(samples.count)) / 0.02)
+        vadStream.feedSamples48kHz(samples).last ?? lastProb
     }
 
     private func runGate(samples: [Int16], prob: Float, timeMs: UInt64) -> [ProcessorOutput] {
@@ -150,7 +144,7 @@ public class AudioProcessor {
                     outputs.append(ProcessorOutput(msgType: kMsgSpeechEnd, timeMs: timeMs, payload: []))
                     state = .idle
                     preRollBuffer.removeAll()
-                    vadStream?.resetState()
+                    vadStream.resetState()
                 } else {
                     state = .maybeSilence(frames: n + 1)
                 }
