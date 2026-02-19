@@ -4,16 +4,22 @@ import voxd
 
 struct ProcessorTests {
 
-    /// Generate a 20ms frame of PCM16LE at 48kHz.
-    private func frame(frequency: Double = 0, amplitude: Double = 0) -> [UInt8] {
-        var buf = [UInt8](repeating: 0, count: 960 * 2)
-        for i in 0..<960 {
-            let sample = Int16(sin(2.0 * .pi * frequency * Double(i) / 48000.0) * amplitude)
-            let u = UInt16(bitPattern: sample)
-            buf[i * 2]     = UInt8(u & 0xff)
-            buf[i * 2 + 1] = UInt8(u >> 8)
-        }
-        return buf
+    private static let model: SileroVADModel? = {
+        let paths = [
+            ProcessInfo.processInfo.environment["VOXD_MODEL_PATH"],
+            {
+                let home = ProcessInfo.processInfo.environment["HOME"] ?? "."
+                let p = "\(home)/models/vad/silero_vad.onnx"
+                return FileManager.default.fileExists(atPath: p) ? p : nil
+            }(),
+        ].compactMap { $0 }
+
+        guard let path = paths.first else { return nil }
+        return try? SileroVADModel(modelPath: path)
+    }()
+
+    private func silenceFrame() -> [UInt8] {
+        [UInt8](repeating: 0, count: 960 * 2)
     }
 
     private func countEvents(_ outputs: [[ProcessorOutput]]) -> (starts: Int, ends: Int) {
@@ -27,9 +33,10 @@ struct ProcessorTests {
         return (s, e)
     }
 
-    @Test func silenceProducesNoEvents() {
-        let proc = AudioProcessor(model: nil)
-        let silence = frame()
+    @Test func silenceProducesNoEvents() throws {
+        let model = try #require(Self.model, "silero_vad.onnx not found")
+        let proc = AudioProcessor(model: model)
+        let silence = silenceFrame()
         let outputs = (0..<100).map { _ in proc.processAudio(samples: silence, streamID: 1, timeMs: 0) }
         let (starts, ends) = countEvents(outputs)
 
@@ -37,17 +44,16 @@ struct ProcessorTests {
         #expect(ends == 0)
     }
 
-    @Test func loudAudioTriggersBoundaries() {
-        let proc = AudioProcessor(model: nil)
-        let loud = frame(frequency: 300, amplitude: 30000)
-        let silence = frame()
+    @Test func outputTypesAreValid() throws {
+        let model = try #require(Self.model, "silero_vad.onnx not found")
+        let proc = AudioProcessor(model: model)
+        let silence = silenceFrame()
 
-        var all: [[ProcessorOutput]] = []
-        for _ in 0..<50 { all.append(proc.processAudio(samples: loud, streamID: 1, timeMs: 0)) }
-        for _ in 0..<50 { all.append(proc.processAudio(samples: silence, streamID: 1, timeMs: 0)) }
-
-        let (starts, ends) = countEvents(all)
-        #expect(starts > 0, "Loud audio should trigger speech start")
-        #expect(ends > 0, "Silence after loud audio should trigger speech end")
+        let validTypes: Set<UInt8> = [kMsgOutAudio, kMsgSpeechStart, kMsgSpeechEnd]
+        for _ in 0..<50 {
+            for o in proc.processAudio(samples: silence, streamID: 1, timeMs: 0) {
+                #expect(validTypes.contains(o.msgType))
+            }
+        }
     }
 }

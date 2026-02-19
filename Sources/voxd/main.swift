@@ -53,6 +53,11 @@ struct Config {
             cfg.modelPath = findModel("silero_vad.onnx")
         }
 
+        guard cfg.modelPath != nil else {
+            fputs("fatal: silero_vad.onnx not found. Provide --model or place it in ~/models/vad/\n", stderr)
+            exit(1)
+        }
+
         return cfg
     }
 
@@ -109,7 +114,7 @@ let cfg = Config.parse()
 
 fputs("voxd starting\n", stderr)
 fputs("  socket: \(cfg.socketPath)\n", stderr)
-fputs("  model:  \(cfg.modelPath ?? "none (RMS fallback)")\n", stderr)
+fputs("  model:  \(cfg.modelPath!)\n", stderr)
 fputs("  vad:    start=\(cfg.startThreshold) end=\(cfg.endThreshold) speech=\(cfg.minSpeechMs)ms silence=\(cfg.minSilenceMs)ms preroll=\(cfg.preRollMs)ms\n", stderr)
 
 let gateConfig = GateConfig(
@@ -121,8 +126,8 @@ let gateConfig = GateConfig(
     logVAD: cfg.logVAD
 )
 
-let server = IPCServer(socketPath: cfg.socketPath, modelPath: cfg.modelPath, gateConfig: gateConfig)
 do {
+    let server = try IPCServer(socketPath: cfg.socketPath, modelPath: cfg.modelPath!, gateConfig: gateConfig)
     try server.start()
 } catch {
     fputs("fatal: \(error)\n", stderr)
