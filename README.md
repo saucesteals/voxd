@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">voxd</h1>
-<p align="center">Low-latency voice activity detection sidecar for real-time audio pipelines.</p>
+<p align="center">Low-latency voice activity detection server for real-time audio pipelines.</p>
 
 ---
 

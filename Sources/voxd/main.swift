@@ -77,7 +77,7 @@ struct Config {
 
     private static func printUsage() {
         print("""
-        voxd - low-latency voice activity detection sidecar
+        voxd - low-latency voice activity detection server
 
         USAGE:
           voxd [options] [socket-path]
