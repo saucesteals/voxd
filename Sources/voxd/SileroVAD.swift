@@ -36,10 +36,14 @@ public final class SileroVADStream {
     private var resampleBuffer: [Float] = []
 
     private static let chunkSize = 512   // Silero v5: 512 samples @ 16kHz
+    private static let contextSize = 64  // Silero v5: 64 samples context window @ 16kHz
     private static let stateElements = 2 * 1 * 128
+
+    private var contextBuffer: [Float]
 
     public init(model: SileroVADModel) {
         self.model = model
+        self.contextBuffer = [Float](repeating: 0, count: Self.contextSize)
         stateData = NSMutableData(length: Self.stateElements * MemoryLayout<Float>.size)!
         srData = NSMutableData(length: MemoryLayout<Int64>.size)!
         var sr: Int64 = 16000
@@ -50,6 +54,7 @@ public final class SileroVADStream {
     public func resetState() {
         stateData.resetBytes(in: NSRange(location: 0, length: stateData.length))
         resampleBuffer.removeAll()
+        contextBuffer = [Float](repeating: 0, count: Self.contextSize)
     }
 
     /// Feed 48kHz Int16 PCM samples. Returns VAD probabilities for each completed
@@ -75,10 +80,16 @@ public final class SileroVADStream {
     public func infer(_ samples: [Float]) throws -> Float {
         precondition(samples.count == Self.chunkSize)
 
-        let inputData = NSMutableData(bytes: samples, length: samples.count * MemoryLayout<Float>.size)
+        // Prepend context window (64 samples) to input chunk (512 samples) → 576 total
+        var inputWithContext = contextBuffer + samples
+        // Save last 64 samples as context for next call
+        contextBuffer = Array(inputWithContext.suffix(Self.contextSize))
+
+        let totalSize = Self.contextSize + Self.chunkSize
+        let inputData = NSMutableData(bytes: &inputWithContext, length: totalSize * MemoryLayout<Float>.size)
         let inputTensor = try ORTValue(
             tensorData: inputData, elementType: .float,
-            shape: [1, NSNumber(value: Self.chunkSize)]
+            shape: [1, NSNumber(value: totalSize)]
         )
         let stateTensor = try ORTValue(
             tensorData: stateData, elementType: .float, shape: [2, 1, 128]
